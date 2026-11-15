@@ -10,6 +10,7 @@ import {
   TrendingDown,
   TrendingUp,
   UploadCloud,
+  Zap,
 } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/api/client"
@@ -17,8 +18,9 @@ import { ForecastChart } from "@/components/charts/ForecastChart"
 import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
+import { Dialog } from "@/components/ui/Dialog"
 import { formatNumber } from "@/lib/utils"
-import { Dataset, RunResult } from "@/types"
+import { AutopilotResponse, Dataset, RunResult } from "@/types"
 
 interface OverviewPageProps {
   currentDataset: Dataset | null
@@ -36,6 +38,28 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [isAutopilotRunning, setIsAutopilotRunning] = useState(false)
+  const [autopilotResult, setAutopilotResult] = useState<AutopilotResponse | null>(null)
+  const [isAutopilotModalOpen, setIsAutopilotModalOpen] = useState(false)
+
+  const handleAutopilot = async () => {
+    if (!currentDataset) {
+      toast.error("Please load or select a dataset first")
+      return
+    }
+    try {
+      setIsAutopilotRunning(true)
+      toast.info("Autopilot initiated: Profile → Clean → Train → Leaderboard → Executive Brief...")
+      const res = await api.runAutopilot(currentDataset.id, 30)
+      setAutopilotResult(res)
+      setIsAutopilotModalOpen(true)
+      toast.success("Autopilot completed successfully!")
+    } catch (e: any) {
+      toast.error(e.message || "Autopilot failed")
+    } finally {
+      setIsAutopilotRunning(false)
+    }
+  }
 
   const handleSampleData = async () => {
     try {
@@ -86,13 +110,25 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
 
         <div className="flex items-center gap-2.5">
           {currentDataset && (
-            <Button variant="outline" size="sm" onClick={() => navigate("/forecast")}>
-              <BarChart3 className="h-4 w-4 mr-1.5" />
-              Forecast Studio
-            </Button>
+            <>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleAutopilot}
+                isLoading={isAutopilotRunning}
+                className="bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 text-white shadow-md hover:shadow-lg"
+              >
+                <Zap className="h-4 w-4 mr-1.5 fill-current" />
+                Autopilot
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate("/forecast")}>
+                <BarChart3 className="h-4 w-4 mr-1.5" />
+                Forecast Studio
+              </Button>
+            </>
           )}
           <Button
-            variant="primary"
+            variant={currentDataset ? "secondary" : "primary"}
             size="sm"
             onClick={handleSampleData}
             isLoading={isUploading}
@@ -309,6 +345,77 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           </Card>
         </div>
       )}
+
+      {/* Autopilot Executive Summary Modal */}
+      <Dialog
+        open={isAutopilotModalOpen}
+        onClose={() => setIsAutopilotModalOpen(false)}
+        title="Autopilot Executive Briefing"
+        description="Autonomous 1-click execution: profile → clean → train 4 models → pick best → executive narrative."
+        className="max-w-2xl"
+      >
+        {autopilotResult && (
+          <div className="space-y-4 text-xs">
+            <div className="flex items-center justify-between p-3 rounded-xl bg-primary/5 border border-primary/20">
+              <div>
+                <span className="font-semibold text-foreground text-sm">
+                  Winner: {autopilotResult.forecast.best_model}
+                </span>
+                <span className="text-muted-foreground block text-[11px]">
+                  Lowest out-of-sample error ({autopilotResult.forecast.best_wape}% WAPE)
+                </span>
+              </div>
+              <Badge variant="indigo" size="md">
+                Confidence: {autopilotResult.executive_summary.confidence}
+              </Badge>
+            </div>
+
+            <div className="space-y-3 p-4 rounded-xl border border-border bg-card">
+              <h4 className="font-semibold text-sm text-foreground">5-Bullet Executive Brief</h4>
+
+              <div className="space-y-2.5">
+                <div className="flex items-start gap-2">
+                  <span className="font-semibold text-primary min-w-[130px]">1. Volume Outlook:</span>
+                  <span className="text-foreground">{autopilotResult.executive_summary.outlook}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="font-semibold text-indigo-500 min-w-[130px]">2. Key Drivers:</span>
+                  <span className="text-foreground">{autopilotResult.executive_summary.drivers}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="font-semibold text-amber-500 min-w-[130px]">3. Operational Risks:</span>
+                  <span className="text-foreground">{autopilotResult.executive_summary.risks}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="font-semibold text-emerald-500 min-w-[130px]">4. Recommended:</span>
+                  <span className="text-foreground">{autopilotResult.executive_summary.recommended_actions}</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="font-semibold text-violet-500 min-w-[130px]">5. Confidence Level:</span>
+                  <span className="text-foreground">{autopilotResult.executive_summary.confidence}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <Button variant="outline" size="sm" onClick={() => setIsAutopilotModalOpen(false)}>
+                Close
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setIsAutopilotModalOpen(false)
+                  navigate("/forecast")
+                }}
+              >
+                Open in Forecast Studio
+                <ArrowRight className="h-3.5 w-3.5 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   )
 }

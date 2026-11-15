@@ -1,3 +1,4 @@
+from backend.app.api.agent import router as agent_router
 from backend.app.api.datasets import router as datasets_router
 from backend.app.api.health import router as health_router
 from backend.app.api.runs import router as runs_router
@@ -8,3 +9,4 @@ api_router = APIRouter(prefix="/api")
 api_router.include_router(health_router)
 api_router.include_router(datasets_router)
 api_router.include_router(runs_router)
+api_router.include_router(agent_router)

@@ -1,7 +1,10 @@
 import {
+  AutopilotResponse,
+  ChatSession,
   ColumnMappingUpdate,
   Dataset,
   DatasetPreview,
+  LLMSettings,
   ModelOption,
   QualityReport,
   RunResult,
@@ -124,5 +127,39 @@ export const api = {
 
   getDownloadUrl: (id: string): string => {
     return `${BASE_URL}/runs/${id}/download`
+  },
+
+  // ==========================================
+  // Phase 2: Conversational Agent API
+  // ==========================================
+  runAutopilot: (datasetId: string, horizon = 30): Promise<AutopilotResponse> => {
+    return request<AutopilotResponse>("/agent/autopilot", {
+      method: "POST",
+      body: JSON.stringify({ dataset_id: datasetId, horizon }),
+    })
+  },
+
+  testConnection: (llmSettings: LLMSettings): Promise<{ success: boolean; message: string; model: string; provider: string }> => {
+    return request("/agent/test-connection", {
+      method: "POST",
+      body: JSON.stringify({
+        provider: llmSettings.provider,
+        api_key: llmSettings.apiKey,
+        base_url: llmSettings.baseUrl,
+        model: llmSettings.model,
+      }),
+    })
+  },
+
+  listChatSessions: (): Promise<ChatSession[]> => {
+    return request<ChatSession[]>("/agent/sessions")
+  },
+
+  getChatSession: (id: string): Promise<ChatSession> => {
+    return request<ChatSession>(`/agent/sessions/${id}`)
+  },
+
+  deleteChatSession: (id: string): Promise<{ status: string }> => {
+    return request<{ status: string }>(`/agent/sessions/${id}`, { method: "DELETE" })
   },
 }

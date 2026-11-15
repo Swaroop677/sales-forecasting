@@ -2,6 +2,7 @@ import React from "react"
 import { NavLink } from "react-router-dom"
 import {
   BarChart3,
+  Bot,
   Database,
   History,
   LayoutDashboard,
@@ -18,6 +19,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const navItems = [
     { to: "/", label: "Overview", icon: LayoutDashboard },
+    { to: "/agent", label: "AI Copilot", icon: Bot },
     { to: "/data", label: "Data Quality", icon: Database },
     { to: "/forecast", label: "Forecast Studio", icon: BarChart3 },
     { to: "/runs", label: "Model Registry", icon: History },
@@ -41,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => 
             {!collapsed && (
               <div className="flex flex-col">
                 <span className="font-semibold text-sm tracking-tight text-foreground">Forecastly</span>
-                <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">Phase 1</span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">Phase 2 AI</span>
               </div>
             )}
           </NavLink>

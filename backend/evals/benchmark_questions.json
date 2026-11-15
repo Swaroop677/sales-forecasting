@@ -1,0 +1,107 @@
+[
+  {
+    "id": "eval_01",
+    "category": "Data Inspection",
+    "prompt": "How many rows and what is the health score of my dataset?",
+    "expected_tool": "profile_dataset",
+    "expected_facts": ["row_count", "health_score", "cadence"]
+  },
+  {
+    "id": "eval_02",
+    "category": "Validation",
+    "prompt": "Is this dataset clean and valid for training forecasting models?",
+    "expected_tool": "validate_data",
+    "expected_facts": ["is_valid_for_forecasting", "health_score"]
+  },
+  {
+    "id": "eval_03",
+    "category": "Data Cleaning",
+    "prompt": "Please clean my sales dataset, fill any timeline gaps, and bound outliers.",
+    "expected_tool": "clean_data",
+    "expected_facts": ["actions_taken", "new_health_score"]
+  },
+  {
+    "id": "eval_04",
+    "category": "Forecasting",
+    "prompt": "Forecast sales for the next 30 days across all candidate models.",
+    "expected_tool": "run_forecast",
+    "expected_facts": ["best_model", "best_wape", "forecast_period_total"]
+  },
+  {
+    "id": "eval_05",
+    "category": "Forecasting",
+    "prompt": "Forecast the next 8 weeks of demand.",
+    "expected_tool": "run_forecast",
+    "expected_facts": ["horizon_days", "forecast_period_total"]
+  },
+  {
+    "id": "eval_06",
+    "category": "Model Comparison",
+    "prompt": "Which model won the leaderboard and what was its WAPE error rate?",
+    "expected_tool": "get_leaderboard",
+    "expected_facts": ["winning_model", "wape_pct", "mae"]
+  },
+  {
+    "id": "eval_07",
+    "category": "Model Comparison",
+    "prompt": "Show me the accuracy metrics for all trained models.",
+    "expected_tool": "get_leaderboard",
+    "expected_facts": ["models", "winning_model"]
+  },
+  {
+    "id": "eval_08",
+    "category": "Forecast Retrieval",
+    "prompt": "What is our total projected sales volume and percentage change vs last period?",
+    "expected_tool": "get_forecast",
+    "expected_facts": ["forecast_total", "last_period_total", "pct_change"]
+  },
+  {
+    "id": "eval_09",
+    "category": "Anomaly Detection",
+    "prompt": "Why did sales dip in March? Did we have any supply outages?",
+    "expected_tool": "find_anomalies",
+    "expected_facts": ["total_anomalies_detected", "anomalies"]
+  },
+  {
+    "id": "eval_10",
+    "category": "Anomaly Detection",
+    "prompt": "Detect all historical sales anomalies, spikes, and drop-offs in the timeline.",
+    "expected_tool": "find_anomalies",
+    "expected_facts": ["total_anomalies_detected", "anomalies"]
+  },
+  {
+    "id": "eval_11",
+    "category": "Scenario Simulation",
+    "prompt": "What if I run a 20% promo next month? How much extra volume will it drive?",
+    "expected_tool": "what_if",
+    "expected_facts": ["baseline_forecast_total", "simulated_forecast_total", "volume_impact_pct"]
+  },
+  {
+    "id": "eval_12",
+    "category": "Scenario Simulation",
+    "prompt": "What if we discount prices by 10%? What is the simulated demand lift?",
+    "expected_tool": "what_if",
+    "expected_facts": ["baseline_forecast_total", "simulated_forecast_total", "volume_impact_pct"]
+  },
+  {
+    "id": "eval_13",
+    "category": "Product Movers",
+    "prompt": "Which products need attention or are declining in forecasted volume?",
+    "expected_tool": "top_movers",
+    "expected_facts": ["top_declining_groups", "top_growing_groups"]
+  },
+  {
+    "id": "eval_14",
+    "category": "Period Comparison",
+    "prompt": "Compare our last 4 weeks of sales against the prior 4 weeks.",
+    "expected_tool": "compare_periods",
+    "expected_facts": ["percentage_change", "difference"]
+  },
+  {
+    "id": "eval_15",
+    "category": "Executive Briefing",
+    "prompt": "Give me a 5-bullet executive summary with outlook, drivers, and operational risks.",
+    "expected_tool": "executive_summary",
+    "expected_facts": ["outlook", "drivers", "risks", "recommended_actions", "confidence"]
+  }
+]

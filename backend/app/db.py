@@ -8,6 +8,7 @@ engine = create_engine(settings.DATABASE_URL, echo=settings.DEBUG, connect_args=
 
 def init_db() -> None:
     # Import all models so SQLModel metadata is registered
+    import backend.app.models.chat  # noqa: F401
     import backend.app.models.dataset  # noqa: F401
     import backend.app.models.run  # noqa: F401
 

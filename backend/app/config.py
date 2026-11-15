@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     ENABLE_PROPHET: bool = False
     DEFAULT_METRIC: str = "wape"
 
+    # Agent & LLM Provider settings
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    DEFAULT_LLM_PROVIDER: str = "gemini"
+    MAX_AGENT_TOOL_STEPS: int = 6
+    MAX_AGENT_SESSION_MESSAGES: int = 50
+    AGENT_RATE_LIMIT_PER_MINUTE: int = 30
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

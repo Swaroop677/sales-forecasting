@@ -166,3 +166,67 @@ export interface ModelOption {
   description: string
   is_default: boolean
 }
+
+// ==========================================
+// Phase 2: AI Agent Types
+// ==========================================
+export interface GroundingInfo {
+  verified: boolean
+  matched_count: number
+  unverified_numbers: number[]
+  badge_label: string
+  disclaimer: string
+}
+
+export interface ToolCallItem {
+  name: string
+  args: Record<string, any>
+  result?: Record<string, any>
+}
+
+export interface ChatMessage {
+  id: string
+  session_id?: string
+  role: "user" | "assistant" | "system" | "tool"
+  content: string
+  tool_calls?: ToolCallItem[]
+  chart_spec?: Record<string, any> | null
+  grounding_info?: GroundingInfo | null
+  created_at?: string
+  isStreaming?: boolean
+}
+
+export interface ChatSession {
+  id: string
+  title: string
+  dataset_id?: string | null
+  run_id?: string | null
+  created_at: string
+  updated_at: string
+  messages: ChatMessage[]
+}
+
+export interface LLMSettings {
+  provider: "gemini" | "openai" | "fallback"
+  apiKey: string
+  baseUrl: string
+  model: string
+}
+
+export interface AutopilotResponse {
+  status: string
+  dataset_name: string
+  run_id: string
+  validation: Record<string, any>
+  cleaning: Record<string, any>
+  forecast: Record<string, any>
+  executive_summary: {
+    outlook: string
+    drivers: string
+    risks: string
+    recommended_actions: string
+    confidence: string
+  }
+  chart_spec?: Record<string, any>
+}
+
