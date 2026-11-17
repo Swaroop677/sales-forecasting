@@ -1,148 +1,156 @@
 # Forecastly 📈
 
-An automated sales forecasting web application that transforms historical retail data into accurate multi-step forecasts with model leaderboard comparison in 3 clicks.
+[![CI Pipeline](https://github.com/Swaroop677/sales-forecasting/actions/workflows/ci.yml/badge.svg)](https://github.com/Swaroop677/sales-forecasting/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python: 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![React: 18](https://img.shields.io/badge/react-18-61dafb.svg)](https://react.dev/)
+[![Status: Phase 3 Complete](https://img.shields.io/badge/status-Phase%203%20Complete-emerald.svg)]()
 
-Designed for non-technical retail analysts and planners with modern SaaS aesthetics (Linear / Vercel style), dark/light mode, and high-performance ML backtesting.
+> **Automated Sales Forecasting, Conversational AI Intelligence, and Inventory Optimization.**  
+> Transforms historical transactions into calibrated multi-step forecasts with model leaderboard comparison, TreeSHAP explainability, and split-conformal uncertainty intervals in 3 clicks.
 
 ---
 
-## Architecture
+## 🌟 Key Highlights
+
+- **Multi-Model Rolling-Origin Backtesting**: Automatically evaluates Seasonal Naive, Holt-Winters, LightGBM, and XGBoost across expanding test folds with zero data leakage. Selects the champion model by out-of-sample WAPE.
+- **Split-Conformal Prediction Intervals**: Model-agnostic 80% and 95% uncertainty bands calibrated from backtest residuals with empirical coverage tracking.
+- **Conversational AI Forecasting Copilot (⌘K)**: Streamed SSE agent powered by Google Gemini, OpenAI-compatible APIs (Groq/Ollama/OpenRouter), or a zero-key Rule-Based Fallback. All numbers are strictly verified against deterministic pipeline results.
+- **TreeSHAP & Decomposition Explainability**: Global driver importance and local "Why this number?" waterfall breakdowns.
+- **Inventory Decision Support**: Safety stocks ($SS = z \cdot \sigma_e \cdot \sqrt{L}$), reorder point (ROP), and suggested replenishment sizes with status chips and CSV export.
+- **Data Drift Monitoring**: Population Stability Index (PSI) and Kolmogorov-Smirnov (KS) test for feature staleness alerts.
+- **Multi-Sheet Excel & Printable PDF Reports**: One-click professional multi-sheet Excel exports and `@media print` formatted executive reports.
+- **Free-Host Constraints**: Strictly adheres to $\le$ 2 GB RAM, CPU-only instances with background in-process jobs.
+
+---
+
+## 📸 Screenshots
+
+| Overview & KPI Dashboard | Forecast Studio & Conformal Bands |
+|:---:|:---:|
+| *(Screenshot Placeholder: Overview)* | *(Screenshot Placeholder: Forecast Studio)* |
+
+| AI Copilot Drawer (⌘K) | TreeSHAP Driver Explainability |
+|:---:|:---:|
+| *(Screenshot Placeholder: AI Copilot)* | *(Screenshot Placeholder: Explainability)* |
+
+---
+
+## 🏗️ System Architecture
 
 ```mermaid
-flowchart LR
-    A["Historical Sales\n(CSV / Excel / Sample)"] --> B["Data Profiler & Quality Audit"]
-    B --> C["Automated Sanitization\n(Fill gaps, dedupe, clip)"]
-    C --> D["Feature Builder\n(Zero-leakage lags & rolling)"]
-    D --> E["Rolling-Origin Backtest\n(3 Folds CV)"]
-    E --> F["Candidate Models\n- Seasonal Naive\n- Holt-Winters\n- LightGBM\n- XGBoost"]
-    F --> G["Leaderboard\n(WAPE, MAE, RMSE, sMAPE, MASE)"]
-    G --> H["Winning Model Refit\n& Horizon Forecast"]
+flowchart TD
+    subgraph Client["Frontend (React 18 + TypeScript + Vite)"]
+        UI["Modern Dashboard (Tailwind + shadcn)"]
+        Chat["AI Copilot Drawer & Page (SSE Stream)"]
+        Charts["Forecast Chart with Conformal Bands"]
+        Analytics["Explainability, Segments, Inventory Tabs"]
+    end
+
+    subgraph API["FastAPI Application Layer"]
+        Router["API Router (/api)"]
+        SecHeaders["Security Headers & Timing Middleware"]
+        HealthReady["/health & /ready Probes"]
+        SSEStream["SSE Streaming /api/agent/chat"]
+    end
+
+    subgraph Engine["Deterministic Services & ML Layer"]
+        Profiler["Data Profiler & Quality Report"]
+        Cleaner["Sanitizer & Audit Log"]
+        Backtest["Rolling-Origin Expanding-Window Backtest"]
+        Conformal["Split-Conformal Calibration (80% & 95%)"]
+        SHAP["TreeSHAP & Decomposition Explainability"]
+        Inventory["Inventory Decision Support (SS / ROP)"]
+        Drift["PSI & KS Drift Monitor"]
+    end
+
+    subgraph LLM["Agent & LLM Provider Layer"]
+        Orchestrator["Tool-Calling Loop (Max 6 turns)"]
+        Gemini["Google Gemini Provider (REST)"]
+        OpenAI["OpenAI-Compatible Provider"]
+        Fallback["Rule-Based Fallback (Zero Key)"]
+        Grounding["Numeric Grounding Verifier"]
+    end
+
+    subgraph Persistence["Storage Layer"]
+        SQLite[("SQLite / Optional Postgres (SQLModel)")]
+        DiskStorage["Ephemeral Disk / Artifacts"]
+    end
+
+    UI --> Router
+    Chat --> SSEStream
+    Router --> Engine
+    SSEStream --> Orchestrator
+    Orchestrator --> Engine
+    Orchestrator --> Gemini
+    Orchestrator --> OpenAI
+    Orchestrator --> Fallback
+    Orchestrator --> Grounding
+    Engine --> SQLite
+    Engine --> DiskStorage
 ```
 
 ---
 
-## Free-Hosting Architecture Constraints
+## ⚡ Quick Start
 
-Optimized to run reliably on 1–2 GB RAM, CPU-only ephemeral cloud containers (Render, Railway, Fly.io, Cloud Run):
-- **CPU cap**: Thread pools constrained to `n_jobs <= 2`.
-- **Upload safety**: Hard ceiling of 10 MB and 200,000 rows.
-- **In-process queue**: Uses FastAPI `BackgroundTasks` and SQLite job status polling without Redis or Celery.
-- **Ephemeral recovery**: If instances restart and storage is cleared, returns friendly notices prompting re-upload or sample data.
-- **Lazy loading**: Heavy forecasting libraries (e.g. Prophet) are lazy-loaded and disabled by default (`ENABLE_PROPHET=false`).
+### 1. Local Development
 
----
-
-## Quick Start
-
-### 1. Local Development (Without Docker)
-
-#### Prerequisites
-- Python 3.11+
-- Node.js 18+ and npm
-
-#### Backend Setup
 ```bash
-# 1. Create and activate virtual environment
+# 1. Clone repository
+git clone https://github.com/Swaroop677/sales-forecasting.git
+cd sales-forecasting
+
+# 2. Setup Python environment
 python3 -m venv .venv
 source .venv/bin/activate
-
-# 2. Install dependencies
 pip install -r backend/requirements.txt
 
-# 3. Run test suite
-PYTHONPATH=. pytest backend/tests -v
+# 3. Start Backend
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8080 --reload
 
-# 4. Start backend server
-python3 -m backend.app.main
-# Backend runs on http://localhost:8080 (API docs at http://localhost:8080/docs)
-```
-
-#### Frontend Setup (Separate Terminal)
-```bash
+# 4. In a second terminal, start Frontend
 cd frontend
 npm install
 npm run dev
-# Vite dev server runs on http://localhost:5173 with auto-proxy to 8080
 ```
+Open **[http://localhost:5173](http://localhost:5173)** in your browser.
 
 ---
 
-### 2. Single-Command Production Build
-
-To build the frontend and serve both API and UI from the single FastAPI instance:
+### 2. Single-Container Production Run
 
 ```bash
-# Build frontend static bundle
-npm --prefix frontend run build
-
-# Start FastAPI serving static SPA + API on port 8080
-source .venv/bin/activate
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8080
+docker build -t forecastly .
+docker run -p 8080:8080 forecastly
 ```
-Open **http://localhost:8080** in your browser.
+Visit **[http://localhost:8080](http://localhost:8080)**.
 
 ---
 
-### 3. Docker Deployment
+## 🛠️ Tech Stack
 
-```bash
-# Build multi-stage container
-docker build -t forecastly:latest .
-
-# Run container on port 8080
-docker run -p 8080:8080 forecastly:latest
-```
-
-Using Docker Compose:
-```bash
-docker compose up --build
-```
+| Layer | Technologies |
+|---|---|
+| **Backend** | Python 3.11, FastAPI, SQLModel (SQLite / PostgreSQL), Pydantic v2 |
+| **Forecasting & ML** | LightGBM, XGBoost, Statsmodels, Scikit-learn, OpenMP |
+| **Explainability** | TreeSHAP (native contributions), Classical Decomposition |
+| **Frontend** | React 18, TypeScript (strict), Vite, Tailwind CSS, shadcn/ui, Recharts |
+| **AI Copilot** | Google GenAI REST, OpenAI-compatible API, Deterministic Fallback, SSE |
+| **Packaging** | Multi-stage Dockerfile, Cloud Run, Render, GitHub Pages |
 
 ---
 
-## Environment Variables
+## 👥 Project Contributions
 
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `PORT` | `8080` | Web server listening port |
-| `HOST` | `0.0.0.0` | Binding host address |
-| `DEBUG` | `false` | Enable verbose logging |
-| `DATABASE_URL` | `sqlite:///storage/forecastly.db` | SQLite connection string |
-| `MAX_UPLOAD_SIZE_BYTES` | `10485760` (10 MB) | Maximum upload payload size |
-| `MAX_UPLOAD_ROWS` | `200000` | Maximum rows accepted in spreadsheet |
-| `N_JOBS` | `2` | Parallel thread limit for tree models |
-| `ENABLE_PROPHET` | `false` | Optional Facebook Prophet model integration |
-| `DEFAULT_METRIC` | `wape` | Default metric to determine leaderboard winner |
+| Team Member | Role | Key Contributions |
+|---|---|---|
+| *Member 1* | *Full-Stack / ML Lead* | Forecasting pipeline, rolling-origin backtest, conformal intervals |
+| *Member 2* | *AI & Agent Systems* | Tool-calling agent, provider integration, numeric grounding verification |
+| *Member 3* | *Frontend & UI/UX* | Dashboard aesthetics, chart components, interactive tabs, accessibility |
+| *Member 4* | *MLOps & DevOps* | Multi-stage Dockerfile, CI/CD workflows, Cloud Run / Render deployment |
 
 ---
 
-## REST API Overview
-
-- `GET /health`: Server health check and feature flags
-- `POST /api/datasets/sample`: Generate synthetic retail data (3 stores × 5 products, 3 years daily)
-- `POST /api/datasets/upload`: Upload CSV/Excel dataset with automated column inference
-- `GET /api/datasets/{id}/preview`: Paginated row inspection and inferred data types
-- `GET /api/datasets/{id}/profile`: Comprehensive data quality report
-- `POST /api/datasets/{id}/clean`: Execute automated sanitization and audit logging
-- `POST /api/datasets/{id}/mapping`: Override detected date/target/group column roles
-- `GET /api/datasets/{id}/series`: List available sliceable series
-- `POST /api/runs`: Enqueue rolling backtest and forecast job
-- `GET /api/runs/{id}`: Poll background training progress (0–100%)
-- `GET /api/runs/{id}/result`: Fetch winning model, leaderboard metrics, and forecast series
-- `GET /api/runs`: List historical runs
-- `GET /api/runs/{id}/download`: Export forecast as CSV
-
----
-
-## 10-Point Manual Acceptance Checklist
-
-1. **One-Click Sample Data**: Click "Try Sample Data" on the Overview screen. Verify 16,425 rows are loaded across 3 stores and 5 products.
-2. **Column Auto-Detection**: Navigate to Data Quality screen; confirm `date` is marked as Date, `sales` as Target, and `store`/`product` as Group columns.
-3. **Quality Audit Report**: Check the data health checklist. Confirm missing dates, duplicates, negatives, and outlier checks are displayed with plain-English fixes.
-4. **Automated Cleaning Action**: Click "Fix Automatically". Verify audit logs are created showing applied sanitizations and health score updates.
-5. **Role Override**: Click "Edit Roles" in the Data screen, reassign columns, and confirm the dataset is re-profiled without error.
-6. **Configurable Horizon Presets**: On the Forecast Studio screen, toggle horizon between 7, 14, 30, and 90 days.
-7. **Model Multi-Select**: Select candidate models (Seasonal Naive, Holt-Winters, LightGBM, XGBoost) and click "Run Forecast".
-8. **Real-time Progress Stepper**: Observe the live progress bar and status steps (Validate → Train Models → Backtest Folds → Forecast Horizon).
-9. **Interactive Visualization & Leaderboard**: Review the forecast chart with shaded future horizon, 80% confidence bands, and backtest prediction toggle. Inspect the leaderboard for the winning model badge.
-10. **CSV Export & Run Registry**: Click "Download Forecast (CSV)" to verify downloaded predictions. Visit the Model Registry to compare historical runs side-by-side.
+## 📄 License
+This project is licensed under the [MIT License](LICENSE).

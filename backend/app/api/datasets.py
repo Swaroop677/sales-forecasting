@@ -344,3 +344,26 @@ def get_available_series(dataset_id: str, session: Session = Depends(get_session
                 )
 
     return series_options
+
+
+@router.get("/{dataset_id}/drift")
+def get_dataset_drift(dataset_id: str, session: Session = Depends(get_session)):
+    """Computes PSI and KS distribution drift report to assess data staleness."""
+    from backend.app.services.ml.drift import compute_drift_report
+
+    dataset = session.get(Dataset, dataset_id)
+    if not dataset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found.")
+
+    file_path = Path(dataset.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset file missing.")
+
+    df = pd.read_excel(file_path) if file_path.suffix.lower() in [".xlsx", ".xls"] else pd.read_csv(file_path)
+
+    return compute_drift_report(
+        df=df,
+        date_col=dataset.date_col,
+        target_col=dataset.target_col,
+        regressor_cols=dataset.regressor_cols or [],
+    )

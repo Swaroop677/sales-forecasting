@@ -3,19 +3,30 @@ import { BrowserRouter, Route, Routes } from "react-router-dom"
 import { Sparkles } from "lucide-react"
 import { Toaster } from "sonner"
 import { ChatDrawer } from "@/components/agent/ChatDrawer"
+import { ShortcutsModal } from "@/components/common/ShortcutsModal"
 import { Header } from "@/components/layout/Header"
 import { Sidebar } from "@/components/layout/Sidebar"
+import { OnboardingTour } from "@/components/onboarding/OnboardingTour"
+import { MOCK_DATASET, MOCK_RUN } from "@/demo/mockData"
 import { AgentPage } from "@/pages/AgentPage"
 import { DataPage } from "@/pages/DataPage"
 import { ForecastPage } from "@/pages/ForecastPage"
 import { OverviewPage } from "@/pages/OverviewPage"
+import { ReportPage } from "@/pages/ReportPage"
 import { RunsPage } from "@/pages/RunsPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { Dataset, RunResult } from "@/types"
 
 export const App: React.FC = () => {
-  const [currentDataset, setCurrentDataset] = useState<Dataset | null>(null)
-  const [activeRun, setActiveRun] = useState<RunResult | null>(null)
+  const isDemoMode =
+    (import.meta as any).env?.VITE_DEMO_MODE === "true" || window.location.hostname.includes("github.io")
+
+  const [currentDataset, setCurrentDataset] = useState<Dataset | null>(() => {
+    return isDemoMode ? MOCK_DATASET : null
+  })
+  const [activeRun, setActiveRun] = useState<RunResult | null>(() => {
+    return isDemoMode ? MOCK_RUN : null
+  })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [darkMode, setDarkMode] = useState(() => {
@@ -57,6 +68,16 @@ export const App: React.FC = () => {
 
         {/* Main Content Area */}
         <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Static Demo Mode Banner */}
+          {isDemoMode && (
+            <div className="bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[11px] font-medium py-1.5 px-4 text-center tracking-wide flex items-center justify-center gap-2 shadow-sm z-30 select-none">
+              <Sparkles className="h-3 w-3 animate-pulse" />
+              <span>
+                <strong>Demo Mode:</strong> Precomputed synthetic results running fully client-side (no backend required).
+              </span>
+            </div>
+          )}
+
           <Header
             currentDataset={currentDataset}
             darkMode={darkMode}
@@ -114,6 +135,7 @@ export const App: React.FC = () => {
                   />
                 }
               />
+              <Route path="/report/:runId" element={<ReportPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </main>
@@ -141,6 +163,10 @@ export const App: React.FC = () => {
             </kbd>
           </button>
         )}
+
+        {/* Onboarding Tour & Keyboard Shortcuts Reference */}
+        <OnboardingTour />
+        <ShortcutsModal />
 
         {/* Global Toast Notifications */}
         <Toaster richColors position="bottom-right" />

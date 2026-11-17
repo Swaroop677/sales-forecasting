@@ -86,6 +86,11 @@ export interface LeaderboardItem {
   wape: number
   smape: number
   mase: number
+  coverage_80?: number
+  coverage_95?: number
+  q_80?: number
+  q_95?: number
+  coverage_summary?: string
   fit_time_sec: number
   is_best: boolean
 }
@@ -95,6 +100,10 @@ export interface ForecastPoint {
   actual?: number | null
   predicted?: number | null
   models?: Record<string, number>
+  lower_80?: number | null
+  upper_80?: number | null
+  lower_95?: number | null
+  upper_95?: number | null
   lower_bound?: number | null
   upper_bound?: number | null
 }
@@ -111,6 +120,10 @@ export interface ForecastSummary {
   pct_change: number
   best_model: string
   best_wape: number
+  coverage_80?: number
+  coverage_95?: number
+  q_80?: number
+  q_95?: number
   horizon: number
   n_folds: number
 }
@@ -228,5 +241,120 @@ export interface AutopilotResponse {
     confidence: string
   }
   chart_spec?: Record<string, any>
+}
+
+export interface ExplainabilityResponse {
+  method: "tree_shap" | "feature_importance" | "decomposition"
+  selected_date?: string
+  base_value?: number
+  global_drivers?: Array<{
+    feature: string
+    mean_abs_impact: number
+    importance_pct: number
+    category: string
+  }>
+  local_breakdown?: Array<{
+    feature: string
+    contribution: number
+    direction: "positive" | "negative"
+    category: string
+  }>
+  category_summary?: Array<{
+    category: string
+    net_impact: number
+  }>
+  narrative?: string
+  // Decomposition specific fields
+  dates?: string[]
+  actual?: number[]
+  trend?: number[]
+  seasonal?: number[]
+  residual?: number[]
+}
+
+export interface SegmentPerformanceResponse {
+  season_performance: Array<{
+    season: string
+    total_sales: number
+    avg_daily_sales: number
+    volatility_pct: number
+    row_count: number
+  }>
+  month_performance: Array<{
+    month_num: number
+    month: string
+    total_sales: number
+    avg_sales: number
+    share_pct: number
+  }>
+  promo_performance: Array<{
+    condition: string
+    days: number
+    avg_daily_sales: number
+    total_sales: number
+  }>
+  promo_lift_pct: number
+  group_segments: Array<{
+    segment: string
+    total_sales: number
+    avg_daily_sales: number
+    volatility_pct: number
+    forecast_error_proxy_wape: number
+    status: string
+  }>
+  worst_segments: Array<{
+    segment: string
+    total_sales: number
+    avg_daily_sales: number
+    volatility_pct: number
+    forecast_error_proxy_wape: number
+    status: string
+  }>
+  heatmap_matrix: Array<Record<string, any>>
+  takeaway: string
+}
+
+export interface InventorySupportResponse {
+  disclaimer: string
+  status: "Reorder now" | "OK" | "Overstock risk"
+  status_color: string
+  lead_time_days: number
+  service_level: string
+  z_factor: number
+  current_stock: number
+  days_of_supply: number
+  daily_demand_mean: number
+  lead_time_demand: number
+  safety_stock: number
+  reorder_point: number
+  suggested_order_qty: number
+  estimated_order_cost: number
+  inventory_summary: Array<{
+    parameter: string
+    value: string
+    description: string
+  }>
+}
+
+export interface DataDriftResponse {
+  has_drift: boolean
+  overall_status: string
+  overall_psi: number
+  reference_period?: string
+  current_period?: string
+  retrain_recommended: boolean
+  banner_message?: string | null
+  features: Array<{
+    feature: string
+    is_target: boolean
+    psi: number
+    ks_statistic: number
+    p_value: number
+    status: string
+    badge: string
+    reference_mean: number
+    current_mean: number
+    mean_shift_pct: number
+  }>
 }
 

@@ -5,6 +5,10 @@ import numpy as np
 import pandas as pd
 from backend.app.services.forecasters import get_forecaster
 from backend.app.services.metrics import calculate_all_metrics
+from backend.app.services.ml.conformal import (
+    compute_conformal_quantiles,
+    compute_empirical_coverage,
+)
 
 
 def run_rolling_origin_backtest(
@@ -63,6 +67,9 @@ def run_rolling_origin_backtest(
 
     fold_metrics_list = []
     model_fold_results: dict[str, list[dict[str, float]]] = {m: [] for m in models}
+    model_residuals: dict[str, list[float]] = {m: [] for m in models}
+    model_actuals: dict[str, list[float]] = {m: [] for m in models}
+    model_preds: dict[str, list[float]] = {m: [] for m in models}
     backtest_overlay_map: dict[str, dict[str, Any]] = {}
 
     total_steps = len(fold_splits) * len(models)
@@ -108,6 +115,10 @@ def run_rolling_origin_backtest(
             metrics["fit_time_sec"] = round(fit_time, 3)
 
             model_fold_results[model_key].append(metrics)
+            model_residuals[model_key].extend([abs(float(yt) - float(yp)) for yt, yp in zip(y_test, preds)])
+            model_actuals[model_key].extend([float(yt) for yt in y_test])
+            model_preds[model_key].extend([float(yp) for yp in preds])
+
             fold_metrics_list.append({
                 "fold_idx": fold_idx + 1,
                 "model_name": forecaster.name,
@@ -147,6 +158,15 @@ def run_rolling_origin_backtest(
         avg_mase = float(np.mean([r["mase"] for r in results]))
         total_time = float(np.sum([r["fit_time_sec"] for r in results]))
 
+        # Split-conformal calibration on backtest residuals
+        conformal_info = compute_conformal_quantiles(model_residuals.get(model_key, []))
+        cov_info = compute_empirical_coverage(
+            actuals=model_actuals.get(model_key, []),
+            predictions=model_preds.get(model_key, []),
+            q_80=conformal_info["q_80"],
+            q_95=conformal_info["q_95"],
+        )
+
         leaderboard.append({
             "model_key": model_key,
             "model_name": forecaster_instance.name,
@@ -155,6 +175,11 @@ def run_rolling_origin_backtest(
             "wape": round(avg_wape, 2),
             "smape": round(avg_smape, 2),
             "mase": round(avg_mase, 3),
+            "coverage_80": cov_info["coverage_80"],
+            "coverage_95": cov_info["coverage_95"],
+            "q_80": conformal_info["q_80"],
+            "q_95": conformal_info["q_95"],
+            "coverage_summary": f"80% interval covered {cov_info['coverage_80']}% of actuals (95% covered {cov_info['coverage_95']}%)",
             "fit_time_sec": round(total_time, 2),
             "is_best": False,
         })
@@ -195,6 +220,9 @@ def run_rolling_origin_backtest(
 
     # Construct unified forecast points
     best_preds = all_future_forecasts[best_model_name]
+    best_q_80 = float(leaderboard[0].get("q_80", 15.0)) if leaderboard else 15.0
+    best_q_95 = float(leaderboard[0].get("q_95", 30.0)) if leaderboard else 30.0
+
     forecast_points = []
     for step_i in range(horizon):
         date_str = future_date_strings[step_i]
@@ -204,20 +232,27 @@ def run_rolling_origin_backtest(
         }
         val = round(float(best_preds[step_i]), 2)
 
-        # Confidence interval placeholders for Phase 3:
-        # 80% heuristic band around prediction based on recent historical volatility
-        historical_std = float(df_sorted[target_col].tail(30).std()) or 1.0
-        z_factor = 1.28 * np.sqrt(step_i + 1) * 0.15 * historical_std
-        lower_b = max(0.0, round(val - z_factor, 2))
-        upper_b = round(val + z_factor, 2)
+        # Split-conformal prediction intervals (80% and 95%) with horizon fan-out
+        time_factor = np.sqrt(step_i + 1)
+        step_q_80 = best_q_80 * (0.85 + 0.15 * time_factor)
+        step_q_95 = best_q_95 * (0.85 + 0.15 * time_factor)
+
+        lower_80 = max(0.0, round(val - step_q_80, 2))
+        upper_80 = round(val + step_q_80, 2)
+        lower_95 = max(0.0, round(val - step_q_95, 2))
+        upper_95 = round(val + step_q_95, 2)
 
         forecast_points.append({
             "date": date_str,
             "actual": None,
             "predicted": val,
             "models": point_models,
-            "lower_bound": lower_b,
-            "upper_bound": upper_b,
+            "lower_80": lower_80,
+            "upper_80": upper_80,
+            "lower_95": lower_95,
+            "upper_95": upper_95,
+            "lower_bound": lower_80,
+            "upper_bound": upper_80,
         })
 
     # Historical points (last 90 days for smooth chart display)
@@ -229,6 +264,10 @@ def run_rolling_origin_backtest(
             "actual": round(float(row[target_col]), 2),
             "predicted": None,
             "models": {},
+            "lower_80": None,
+            "upper_80": None,
+            "lower_95": None,
+            "upper_95": None,
             "lower_bound": None,
             "upper_bound": None,
         })
@@ -253,6 +292,10 @@ def run_rolling_origin_backtest(
         "pct_change": pct_change,
         "best_model": best_model_name,
         "best_wape": leaderboard[0]["wape"] if leaderboard else 0.0,
+        "coverage_80": leaderboard[0].get("coverage_80", 80.0) if leaderboard else 80.0,
+        "coverage_95": leaderboard[0].get("coverage_95", 95.0) if leaderboard else 95.0,
+        "q_80": leaderboard[0].get("q_80", 0.0) if leaderboard else 0.0,
+        "q_95": leaderboard[0].get("q_95", 0.0) if leaderboard else 0.0,
         "horizon": horizon,
         "n_folds": len(fold_splits),
     }

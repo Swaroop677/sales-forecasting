@@ -20,6 +20,11 @@ class LeaderboardItem(BaseModel):
     wape: float
     smape: float
     mase: float
+    coverage_80: Optional[float] = None
+    coverage_95: Optional[float] = None
+    q_80: Optional[float] = None
+    q_95: Optional[float] = None
+    coverage_summary: Optional[str] = None
     fit_time_sec: float
     is_best: bool = False
 
@@ -29,8 +34,12 @@ class ForecastPoint(BaseModel):
     actual: Optional[float] = None
     predicted: Optional[float] = None
     models: dict[str, float] = Field(default_factory=dict)
-    lower_bound: Optional[float] = None  # designed for Phase 3 confidence bands
-    upper_bound: Optional[float] = None  # designed for Phase 3 confidence bands
+    lower_80: Optional[float] = None
+    upper_80: Optional[float] = None
+    lower_95: Optional[float] = None
+    upper_95: Optional[float] = None
+    lower_bound: Optional[float] = None
+    upper_bound: Optional[float] = None
 
 
 class BacktestPoint(BaseModel):

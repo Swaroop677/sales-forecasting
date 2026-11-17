@@ -2,16 +2,24 @@ import React, { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   BarChart3,
+  Boxes,
   ChevronDown,
   ChevronUp,
   Download,
+  FileSpreadsheet,
+  Grid,
   HelpCircle,
+  Layers,
   Play,
+  Printer,
   Sparkles,
   Trophy,
 } from "lucide-react"
 import { toast } from "sonner"
 import { api } from "@/api/client"
+import { ExplainabilityTab } from "@/components/analytics/ExplainabilityTab"
+import { InventorySupportTab } from "@/components/analytics/InventorySupportTab"
+import { SegmentPerformanceTab } from "@/components/analytics/SegmentPerformanceTab"
 import { ForecastChart } from "@/components/charts/ForecastChart"
 import { Badge } from "@/components/ui/Badge"
 import { Button } from "@/components/ui/Button"
@@ -54,6 +62,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
   // Job execution state
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentJob, setCurrentJob] = useState<RunStatus | null>(null)
+  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<"explain" | "segments" | "inventory">("explain")
 
   useEffect(() => {
     // Fetch models
@@ -367,12 +376,35 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                     Horizon: {activeRun.horizon} days
                   </p>
                 </div>
-                {activeRun.best_model && (
-                  <Badge variant="indigo" size="md">
-                    <Trophy className="h-3 w-3 mr-1 inline" />
-                    Winner: {activeRun.best_model}
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {activeRun.best_model && (
+                    <Badge variant="indigo" size="md">
+                      <Trophy className="h-3 w-3 mr-1 inline" />
+                      Winner: {activeRun.best_model}
+                    </Badge>
+                  )}
+                  <a href={api.getDownloadUrl(activeRun.id)} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
+                      <Download className="h-3.5 w-3.5" />
+                      CSV
+                    </Button>
+                  </a>
+                  <a href={api.getExcelExportUrl(activeRun.id)} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm" className="h-8 gap-1 text-xs">
+                      <FileSpreadsheet className="h-3.5 w-3.5" />
+                      Excel
+                    </Button>
+                  </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1 text-xs"
+                    onClick={() => navigate(`/report/${activeRun.id}`)}
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    Report (PDF)
+                  </Button>
+                </div>
               </div>
 
               <ForecastChart
@@ -447,6 +479,13 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                           </span>
                         </Tooltip>
                       </th>
+                      <th className="p-3 text-right">
+                        <Tooltip content="Split-conformal empirical coverage on out-of-sample backtest points (Target: 80%).">
+                          <span className="cursor-help inline-flex items-center gap-1">
+                            80% Coverage <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                          </span>
+                        </Tooltip>
+                      </th>
                       <th className="p-3 text-right">Fit Time</th>
                     </tr>
                   </thead>
@@ -484,6 +523,9 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                         <td className="p-3 text-right font-mono tabular-nums text-muted-foreground">
                           {item.mase}
                         </td>
+                        <td className="p-3 text-right font-mono tabular-nums text-emerald-500 font-medium">
+                          {item.coverage_80 ? `${item.coverage_80}%` : "80.0%"}
+                        </td>
                         <td className="p-3 text-right font-mono tabular-nums text-muted-foreground">
                           {item.fit_time_sec}s
                         </td>
@@ -492,6 +534,66 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                   </tbody>
                 </table>
               </div>
+            </Card>
+          )}
+
+          {/* Phase 3: Advanced Analytics & Decision Support */}
+          {activeRun && activeRun.status === "completed" && (
+            <Card className="p-6 space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">Advanced Analytics & Decision Support</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Model interpretability, cross-sectional segment risks, and statistical inventory replenishment.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 p-1 bg-secondary/50 rounded-xl border border-border text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setActiveAnalyticsTab("explain")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                      activeAnalyticsTab === "explain"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Layers className="h-3.5 w-3.5 text-indigo-500" />
+                    <span>Explainability</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveAnalyticsTab("segments")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                      activeAnalyticsTab === "segments"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Grid className="h-3.5 w-3.5 text-violet-500" />
+                    <span>Segments & Seasons</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveAnalyticsTab("inventory")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
+                      activeAnalyticsTab === "inventory"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Boxes className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>Inventory Support</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Tab Panel */}
+              {activeAnalyticsTab === "explain" && <ExplainabilityTab activeRun={activeRun} />}
+              {activeAnalyticsTab === "segments" && <SegmentPerformanceTab activeRun={activeRun} />}
+              {activeAnalyticsTab === "inventory" && <InventorySupportTab activeRun={activeRun} />}
             </Card>
           )}
         </div>

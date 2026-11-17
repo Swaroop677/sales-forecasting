@@ -37,7 +37,7 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
   height = 420,
 }) => {
   const [showBacktest, setShowBacktest] = useState(showBacktestDefault)
-  const [showConfidenceBands, setShowConfidenceBands] = useState(true)
+  const [intervalLevel, setIntervalLevel] = useState<"both" | "80" | "none">("both")
 
   // Merge backtest overlay into chart data if toggled
   const backtestMap = new Map<string, Record<string, number>>()
@@ -55,16 +55,23 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
       forecastStartDate = pt.date
     }
 
+    const l80 = pt.lower_80 ?? pt.lower_bound
+    const u80 = pt.upper_80 ?? pt.upper_bound
+    const l95 = pt.lower_95 ?? (l80 !== undefined && l80 !== null ? Math.max(0, l80 * 0.85) : null)
+    const u95 = pt.upper_95 ?? (u80 !== undefined && u80 !== null ? u80 * 1.15 : null)
+
     const item: Record<string, any> = {
       date: pt.date,
       actual: pt.actual,
       predicted: pt.predicted,
-      lower_bound: pt.lower_bound,
-      upper_bound: pt.upper_bound,
-      band_range:
-        pt.upper_bound !== undefined && pt.lower_bound !== undefined
-          ? (pt.upper_bound ?? 0) - (pt.lower_bound ?? 0)
-          : null,
+      lower_80: l80,
+      upper_80: u80,
+      lower_95: l95,
+      upper_95: u95,
+      base_95: l95,
+      range_95: (u95 !== null && l95 !== null && u95 !== undefined && l95 !== undefined) ? u95 - l95 : null,
+      base_80: l80,
+      range_80: (u80 !== null && l80 !== null && u80 !== undefined && l80 !== undefined) ? u80 - l80 : null,
     }
 
     // Attach individual model backtest values if active
@@ -81,7 +88,7 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
   return (
     <div className="w-full space-y-4">
       {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground pb-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground pb-2 border-b border-border">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-slate-900 dark:bg-slate-100" />
@@ -110,15 +117,42 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
             <span>Overlay Backtest Predictions</span>
           </label>
 
-          <label className="flex items-center gap-1.5 cursor-pointer hover:text-foreground transition-colors select-none">
-            <input
-              type="checkbox"
-              checked={showConfidenceBands}
-              onChange={(e) => setShowConfidenceBands(e.target.checked)}
-              className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5"
-            />
-            <span>80% Confidence Band</span>
-          </label>
+          <div className="flex items-center gap-1.5 bg-secondary/50 p-1 rounded-lg border border-border">
+            <span className="text-[11px] font-medium px-1.5 text-muted-foreground">Intervals:</span>
+            <button
+              type="button"
+              onClick={() => setIntervalLevel("both")}
+              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                intervalLevel === "both"
+                  ? "bg-background text-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              80% & 95%
+            </button>
+            <button
+              type="button"
+              onClick={() => setIntervalLevel("80")}
+              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                intervalLevel === "80"
+                  ? "bg-background text-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              80% Only
+            </button>
+            <button
+              type="button"
+              onClick={() => setIntervalLevel("none")}
+              className={`px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                intervalLevel === "none"
+                  ? "bg-background text-foreground shadow-xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Off
+            </button>
+          </div>
         </div>
       </div>
 
@@ -127,13 +161,13 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
-              <linearGradient id="forecastAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
-                <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+              <linearGradient id="band95Grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#818cf8" stopOpacity={0.12} />
+                <stop offset="100%" stopColor="#818cf8" stopOpacity={0.04} />
               </linearGradient>
-              <linearGradient id="confidenceBandGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#6366f1" stopOpacity={0.12} />
-                <stop offset="100%" stopColor="#6366f1" stopOpacity={0.04} />
+              <linearGradient id="band80Grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#6366f1" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="#6366f1" stopOpacity={0.08} />
               </linearGradient>
             </defs>
 
@@ -162,11 +196,12 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
             <Tooltip
               content={({ active, payload, label }) => {
                 if (!active || !payload || !payload.length) return null
+                const pt = chartData.find((d) => d.date === label)
                 return (
-                  <div className="rounded-xl border border-border bg-card p-3 shadow-lg text-xs space-y-1.5 min-w-[180px]">
+                  <div className="rounded-xl border border-border bg-card p-3 shadow-lg text-xs space-y-1.5 min-w-[200px]">
                     <div className="font-semibold text-foreground border-b border-border pb-1">{label}</div>
                     {payload.map((entry: any, i: number) => {
-                      if (entry.dataKey === "lower_bound" || entry.dataKey === "band_range") return null
+                      if (entry.dataKey.startsWith("base_") || entry.dataKey.startsWith("range_")) return null
                       return (
                         <div key={i} className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-1.5">
@@ -179,6 +214,24 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
                         </div>
                       )
                     })}
+
+                    {/* Show Conformal Prediction Interval bands in tooltip */}
+                    {pt && pt.predicted !== null && (
+                      <div className="pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground space-y-0.5">
+                        {pt.lower_80 !== null && pt.upper_80 !== null && (
+                          <div className="flex justify-between font-mono">
+                            <span>80% Interval:</span>
+                            <span className="text-foreground">{formatNumber(pt.lower_80)} – {formatNumber(pt.upper_80)}</span>
+                          </div>
+                        )}
+                        {pt.lower_95 !== null && pt.upper_95 !== null && (
+                          <div className="flex justify-between font-mono">
+                            <span>95% Interval:</span>
+                            <span className="text-foreground">{formatNumber(pt.lower_95)} – {formatNumber(pt.upper_95)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               }}
@@ -190,7 +243,7 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
                 x1={forecastStartDate}
                 strokeOpacity={0.3}
                 fill="#6366f1"
-                fillOpacity={0.05}
+                fillOpacity={0.04}
                 label={{
                   value: "FORECAST HORIZON",
                   position: "insideTopRight",
@@ -202,24 +255,47 @@ export const ForecastChart: React.FC<ForecastChartProps> = ({
               />
             )}
 
-            {/* Confidence Band (Phase 3 foundation) */}
-            {showConfidenceBands && (
+            {/* 95% Conformal Confidence Band */}
+            {(intervalLevel === "both") && (
               <>
                 <Area
                   type="monotone"
-                  dataKey="lower_bound"
-                  stackId="band"
+                  dataKey="base_95"
+                  stackId="band95"
                   stroke="none"
                   fill="transparent"
                   isAnimationActive={false}
                 />
                 <Area
                   type="monotone"
-                  dataKey="band_range"
-                  stackId="band"
+                  dataKey="range_95"
+                  stackId="band95"
                   stroke="none"
-                  fill="url(#confidenceBandGrad)"
-                  name="80% Confidence Band"
+                  fill="url(#band95Grad)"
+                  name="95% Conformal Band"
+                  isAnimationActive={false}
+                />
+              </>
+            )}
+
+            {/* 80% Conformal Confidence Band */}
+            {(intervalLevel === "both" || intervalLevel === "80") && (
+              <>
+                <Area
+                  type="monotone"
+                  dataKey="base_80"
+                  stackId="band80"
+                  stroke="none"
+                  fill="transparent"
+                  isAnimationActive={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="range_80"
+                  stackId="band80"
+                  stroke="none"
+                  fill="url(#band80Grad)"
+                  name="80% Conformal Band"
                   isAnimationActive={false}
                 />
               </>

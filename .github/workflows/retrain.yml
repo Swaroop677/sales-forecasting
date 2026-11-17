@@ -1,0 +1,39 @@
+name: Scheduled Model Retraining
+
+on:
+  schedule:
+    # Run every Monday at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Run automated retraining job
+        env:
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+        run: |
+          PYTHONPATH=. python -m backend.app.jobs.retrain retrain_report.md
+
+      - name: Upload Retraining Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrain-report
+          path: retrain_report.md
+          retention-days: 30

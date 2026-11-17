@@ -68,6 +68,27 @@ class ExecutiveSummaryArgs(BaseModel):
     run_id: str = Field(description="ID of the forecast run to generate executive summary facts for")
 
 
+class ExplainForecastArgs(BaseModel):
+    run_id: str = Field(description="ID of the forecast run")
+    date: Optional[str] = Field(default=None, description="Optional target date to explain (YYYY-MM-DD)")
+
+
+class SegmentPerformanceArgs(BaseModel):
+    run_id: str = Field(description="ID of the forecast run")
+
+
+class InventoryRecommendationsArgs(BaseModel):
+    run_id: str = Field(description="ID of the forecast run")
+    lead_time_days: Optional[int] = Field(default=7, description="Supplier lead time in days")
+    service_level: Optional[str] = Field(default="95%", description="Cycle service level target (90%, 95%, 99%)")
+    current_stock: Optional[float] = Field(default=300.0, description="Current on-hand inventory units")
+
+
+class CheckDataDriftArgs(BaseModel):
+    dataset_id: str = Field(description="ID of the dataset to audit for distribution drift")
+    run_id: Optional[str] = Field(default=None, description="Optional run ID for baseline comparison")
+
+
 # Tool Registry Definitions for LLM Function Calling (OpenAI & Gemini format)
 AGENT_TOOL_DEFINITIONS = [
     {
@@ -204,6 +225,55 @@ AGENT_TOOL_DEFINITIONS = [
                 "run_id": {"type": "string", "description": "ID of the forecast run"},
             },
             "required": ["run_id"],
+        },
+    },
+    {
+        "name": "explain_forecast",
+        "description": "Explains feature drivers and SHAP contributions for a model prediction (TreeSHAP or seasonal decomposition) on a given date.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "ID of the forecast run"},
+                "date": {"type": "string", "description": "Optional forecast date to explain (YYYY-MM-DD)"},
+            },
+            "required": ["run_id"],
+        },
+    },
+    {
+        "name": "segment_performance",
+        "description": "Evaluates sales and error metrics sliced by store/product, seasons (Spring/Summer/Fall/Winter), and promotional vs non-promotional days.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "ID of the forecast run"},
+            },
+            "required": ["run_id"],
+        },
+    },
+    {
+        "name": "inventory_recommendations",
+        "description": "Computes statistical safety stock, reorder point (ROP), and suggested order quantity. Labeled decision support, not financial advice.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "ID of the forecast run"},
+                "lead_time_days": {"type": "integer", "description": "Supplier replenishment window in days (default 7)"},
+                "service_level": {"type": "string", "description": "Service level target (90%, 95%, 99%)"},
+                "current_stock": {"type": "number", "description": "Current on-hand inventory units"},
+            },
+            "required": ["run_id"],
+        },
+    },
+    {
+        "name": "check_data_drift",
+        "description": "Audits Population Stability Index (PSI) and Kolmogorov-Smirnov (KS) test to detect feature/target distribution drift and assess if model retraining is needed.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "dataset_id": {"type": "string", "description": "ID of the dataset to audit"},
+                "run_id": {"type": "string", "description": "Optional run ID for baseline reference"},
+            },
+            "required": ["dataset_id"],
         },
     },
 ]

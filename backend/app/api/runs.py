@@ -1,4 +1,5 @@
 import io
+import os
 
 import pandas as pd
 from backend.app.db import get_session
@@ -208,4 +209,183 @@ def download_forecast_csv(run_id: str, session: Session = Depends(get_session)):
         content=stream.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=forecast_{run.id[:8]}.csv"},
+    )
+
+
+# ==========================================
+# Phase 3: Advanced Analytics & MLOps Routes
+# ==========================================
+
+@router.get("/{run_id}/explain")
+def get_run_explainability(
+    run_id: str,
+    date: str = None,
+    session: Session = Depends(get_session),
+):
+    """
+    Computes global and local feature importance via native TreeSHAP (for LightGBM/XGBoost)
+    or seasonal decomposition (for Holt-Winters/Naive).
+    """
+    from backend.app.services.ml.explainability import explain_decomposition, explain_tree_forecast
+
+    run = session.get(ForecastRun, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found.")
+    dataset = session.get(Dataset, run.dataset_id)
+    if not dataset or not os.path.exists(dataset.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset file missing.")
+
+    df = pd.read_csv(dataset.file_path)
+    future_dates = [pt["date"] for pt in run.forecast_series if pt.get("predicted") is not None]
+
+    # Check if champion model artifact exists on disk
+    if run.artifact_path and os.path.exists(run.artifact_path):
+        try:
+            import joblib
+            model_artifact = joblib.load(run.artifact_path)
+            # Try to explain tree model
+            from backend.app.services.feature_builder import build_tabular_features
+            df_clean = df.dropna(subset=[dataset.date_column, dataset.target_column]).sort_values(by=dataset.date_column)
+            feat_df, target_series, feat_names = build_tabular_features(
+                df=df_clean,
+                date_col=dataset.date_column,
+                target_col=dataset.target_column,
+                regressor_cols=dataset.regressor_columns or [],
+            )
+            # Get underlying regressor inside the Forecaster wrapper if present
+            raw_model = getattr(model_artifact, "model", model_artifact)
+            explanation = explain_tree_forecast(
+                model=raw_model,
+                feature_names=feat_names,
+                X_sample=feat_df.tail(60).values,
+                target_date=date,
+                future_dates=future_dates,
+            )
+            return explanation
+        except Exception:
+            pass
+
+    # Fallback to seasonal decomposition
+    return explain_decomposition(df, dataset.date_column, dataset.target_column)
+
+
+@router.get("/{run_id}/segments")
+def get_run_segment_performance(
+    run_id: str,
+    session: Session = Depends(get_session),
+):
+    """Returns cross-sectional metrics sliced by store/product, season, and promotions."""
+    from backend.app.services.ml.segments import compute_segment_and_season_performance
+
+    run = session.get(ForecastRun, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found.")
+    dataset = session.get(Dataset, run.dataset_id)
+    if not dataset or not os.path.exists(dataset.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset file missing.")
+
+    df = pd.read_csv(dataset.file_path)
+    return compute_segment_and_season_performance(
+        df=df,
+        date_col=dataset.date_column,
+        target_col=dataset.target_column,
+        group_cols=dataset.group_columns or [],
+        regressor_cols=dataset.regressor_columns or [],
+        backtest_overlay=run.backtest_overlay or [],
+    )
+
+
+@router.get("/{run_id}/inventory")
+def get_run_inventory_support(
+    run_id: str,
+    lead_time_days: int = 7,
+    service_level: str = "95%",
+    current_stock: float = 300.0,
+    session: Session = Depends(get_session),
+):
+    """
+    Computes statistical safety stock, reorder point, and replenishment recommendations.
+    Clearly labelled: Extension: decision support, not advice.
+    """
+    from backend.app.services.ml.inventory import calculate_inventory_recommendations
+
+    run = session.get(ForecastRun, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found.")
+
+    residuals = []
+    if run.backtest_overlay:
+        best_name = run.best_model
+        for pt in run.backtest_overlay:
+            act = pt.get("actual", 0.0)
+            pred = pt.get("predictions", {}).get(best_name, act)
+            residuals.append(abs(float(act) - float(pred)))
+
+    return calculate_inventory_recommendations(
+        forecast_points=run.forecast_series or [],
+        backtest_residuals=residuals,
+        lead_time_days=lead_time_days,
+        service_level=service_level,
+        current_stock=current_stock,
+    )
+
+
+@router.get("/{run_id}/inventory/export")
+def export_inventory_csv(
+    run_id: str,
+    lead_time_days: int = 7,
+    service_level: str = "95%",
+    current_stock: float = 300.0,
+    session: Session = Depends(get_session),
+):
+    """Downloads inventory decision support table as CSV."""
+    from backend.app.services.ml.inventory import (
+        calculate_inventory_recommendations,
+        generate_inventory_csv,
+    )
+
+    run = session.get(ForecastRun, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found.")
+
+    residuals = [abs(pt.get("actual", 0) - pt.get("predictions", {}).get(run.best_model, 0)) for pt in (run.backtest_overlay or [])]
+    inv_data = calculate_inventory_recommendations(
+        forecast_points=run.forecast_series or [],
+        backtest_residuals=residuals,
+        lead_time_days=lead_time_days,
+        service_level=service_level,
+        current_stock=current_stock,
+    )
+    csv_text = generate_inventory_csv(inv_data)
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=inventory_support_{run.id[:8]}.csv"},
+    )
+
+
+@router.get("/{run_id}/export/excel")
+def export_run_excel(run_id: str, session: Session = Depends(get_session)):
+    """Exports multi-sheet Excel workbook: Forecast, Leaderboard, Inventory, Metadata."""
+    from backend.app.services.ml.excel_export import generate_multisheet_excel_report
+    from backend.app.services.ml.inventory import calculate_inventory_recommendations
+
+    run = session.get(ForecastRun, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found.")
+
+    residuals = [abs(pt.get("actual", 0) - pt.get("predictions", {}).get(run.best_model, 0)) for pt in (run.backtest_overlay or [])]
+    inv_data = calculate_inventory_recommendations(
+        forecast_points=run.forecast_series or [],
+        backtest_residuals=residuals,
+        lead_time_days=7,
+        service_level="95%",
+        current_stock=300.0,
+    )
+
+    excel_bytes = generate_multisheet_excel_report(run_dict=run.dict(), inventory_dict=inv_data)
+    return Response(
+        content=excel_bytes.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=forecastly_report_{run.id[:8]}.xlsx"},
     )

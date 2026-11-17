@@ -183,6 +183,38 @@ class FallbackProvider(LLMProvider):
             )
             return
 
+        # Intent 12 (Phase 3): Explain Forecast / Drivers
+        if any(kw in user_text for kw in ["explain", "drivers", "why", "feature importance", "shap", "decomposition"]):
+            yield LLMEvent(
+                "tool_call",
+                {"name": "explain_forecast", "args": {"run_id": context_run_id}},
+            )
+            return
+
+        # Intent 13 (Phase 3): Segment & Season Performance
+        if any(kw in user_text for kw in ["segment", "season", "quarter", "worst segment", "by store", "by product"]):
+            yield LLMEvent(
+                "tool_call",
+                {"name": "segment_performance", "args": {"run_id": context_run_id}},
+            )
+            return
+
+        # Intent 14 (Phase 3): Inventory Decision Support
+        if any(kw in user_text for kw in ["inventory", "safety stock", "reorder", "stockout", "lead time", "replenish"]):
+            yield LLMEvent(
+                "tool_call",
+                {"name": "inventory_recommendations", "args": {"run_id": context_run_id}},
+            )
+            return
+
+        # Intent 15 (Phase 3): Data Drift & Staleness
+        if any(kw in user_text for kw in ["drift", "stale", "retrain", "psi", "distribution shift"]):
+            yield LLMEvent(
+                "tool_call",
+                {"name": "check_data_drift", "args": {"dataset_id": context_dataset_id}},
+            )
+            return
+
         # Default fallback: run_forecast or get_forecast
         if context_run_id and context_run_id != "default":
             yield LLMEvent("tool_call", {"name": "get_forecast", "args": {"run_id": context_run_id}})
@@ -321,5 +353,74 @@ class FallbackProvider(LLMProvider):
                 f"- **Recommended Actions:** {facts.get('recommended_actions', 'Adjust safety stocks based on forecasted weekend peaks.')}\n"
                 f"- **Forecast Confidence:** **{facts.get('confidence', f'High ({wape}% WAPE)')}**\n"
             )
+
+        if tool_name == "explain_forecast":
+            narrative = result.get("narrative", "")
+            base = result.get("base_value", 0.0)
+            target = result.get("selected_date", "target date")
+            breakdown = result.get("local_breakdown", [])
+            lines = [f"### Feature Importance & Forecast Drivers\n\n**Date Explained:** **{target}** (Baseline Demand: **{base} units**)\n"]
+            if breakdown:
+                lines.append("**Top Drivers Impacting This Prediction:**")
+                for item in breakdown[:4]:
+                    dir_icon = "📈 +" if item.get("contribution", 0) > 0 else "📉 "
+                    lines.append(f"- **{item['feature']}** ({item['category']}): {dir_icon}**{item['contribution']} units**")
+            lines.append(f"\n> **Takeaway:** {narrative}")
+            return "\n".join(lines)
+
+        if tool_name == "segment_performance":
+            takeaway = result.get("takeaway", "")
+            seasons = result.get("season_performance", [])
+            worst = result.get("worst_segments", [])
+            lines = ["### Cross-Sectional Segment & Season Performance\n"]
+            if seasons:
+                lines.append("**Seasonal Volume Breakdown:**")
+                for s in seasons:
+                    lines.append(f"- **{s['season']}**: **{s['total_sales']:,} units** (Daily avg: **{s['avg_daily_sales']} units**, Volatility: **{s['volatility_pct']}%**)")
+            if worst:
+                lines.append("\n**High-Risk Segments:**")
+                for w in worst[:3]:
+                    lines.append(f"- **{w['segment']}**: Forecast Error Proxy **{w['forecast_error_proxy_wape']}% WAPE** ({w['status']})")
+            lines.append(f"\n> **Insight:** {takeaway}")
+            return "\n".join(lines)
+
+        if tool_name == "inventory_recommendations":
+            status = result.get("status", "OK")
+            lead = result.get("lead_time_days", 7)
+            sl = result.get("service_level", "95%")
+            ss = result.get("safety_stock", 0.0)
+            rop = result.get("reorder_point", 0.0)
+            cur = result.get("current_stock", 0.0)
+            order = result.get("suggested_order_qty", 0.0)
+            disc = result.get("disclaimer", "Extension: decision support, not advice.")
+
+            return (
+                f"### Inventory Decision Support\n\n"
+                f"> *{disc}*\n\n"
+                f"- **Inventory Status:** **{status.upper()}** (Current On-Hand: **{cur:,} units**)\n"
+                f"- **Safety Stock (SS):** **{ss:,} units** (at **{sl}** service level, **{lead}-day** lead time)\n"
+                f"- **Reorder Point (ROP):** **{rop:,} units**\n"
+                f"- **Suggested Replenishment:** **{order:,} units**\n"
+            )
+
+        if tool_name == "check_data_drift":
+            status = result.get("overall_status", "Stable")
+            psi = result.get("overall_psi", 0.0)
+            retrain = result.get("retrain_recommended", False)
+            msg = result.get("banner_message", "")
+            features = result.get("features", [])
+
+            lines = [
+                f"### Data Drift & Distribution Stability Audit\n\n"
+                f"- **Overall Status:** **{status}** (Max PSI: **{psi}**)\n"
+                f"- **Retraining Advised:** **{'YES — Model may be stale' if retrain else 'NO — Baseline remains consistent'}**\n"
+            ]
+            if features:
+                lines.append("**Feature Drift Breakdown:**")
+                for f in features[:4]:
+                    lines.append(f"- **{f['feature']}**: PSI **{f['psi']}** (KS p-value: **{f['p_value']}**, Shift: **{f['mean_shift_pct']:+}%**) — {f['status']}")
+            if msg:
+                lines.append(f"\n> ⚠️ **Alert:** {msg}")
+            return "\n".join(lines)
 
         return f"Tool {tool_name} returned results: {str(result)}"

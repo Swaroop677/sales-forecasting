@@ -2,14 +2,18 @@ import {
   AutopilotResponse,
   ChatSession,
   ColumnMappingUpdate,
+  DataDriftResponse,
   Dataset,
   DatasetPreview,
+  ExplainabilityResponse,
+  InventorySupportResponse,
   LLMSettings,
   ModelOption,
   QualityReport,
   RunResult,
   RunStatus,
   RunSummary,
+  SegmentPerformanceResponse,
   SeriesOption,
 } from "@/types"
 
@@ -161,5 +165,45 @@ export const api = {
 
   deleteChatSession: (id: string): Promise<{ status: string }> => {
     return request<{ status: string }>(`/agent/sessions/${id}`, { method: "DELETE" })
+  },
+
+  // ==========================================
+  // Phase 3: Advanced Analytics & Reports API
+  // ==========================================
+  getExplainability: (runId: string, date?: string): Promise<ExplainabilityResponse> => {
+    const q = date ? `?date=${encodeURIComponent(date)}` : ""
+    return request<ExplainabilityResponse>(`/runs/${runId}/explain${q}`)
+  },
+
+  getSegmentPerformance: (runId: string): Promise<SegmentPerformanceResponse> => {
+    return request<SegmentPerformanceResponse>(`/runs/${runId}/segments`)
+  },
+
+  getInventorySupport: (
+    runId: string,
+    leadTime = 7,
+    serviceLevel = "95%",
+    currentStock = 300
+  ): Promise<InventorySupportResponse> => {
+    return request<InventorySupportResponse>(
+      `/runs/${runId}/inventory?lead_time_days=${leadTime}&service_level=${encodeURIComponent(serviceLevel)}&current_stock=${currentStock}`
+    )
+  },
+
+  getDatasetDrift: (datasetId: string): Promise<DataDriftResponse> => {
+    return request<DataDriftResponse>(`/datasets/${datasetId}/drift`)
+  },
+
+  getExcelExportUrl: (runId: string): string => {
+    return `${BASE_URL}/runs/${runId}/export/excel`
+  },
+
+  getInventoryExportUrl: (
+    runId: string,
+    leadTime = 7,
+    serviceLevel = "95%",
+    currentStock = 300
+  ): string => {
+    return `${BASE_URL}/runs/${runId}/inventory/export?lead_time_days=${leadTime}&service_level=${encodeURIComponent(serviceLevel)}&current_stock=${currentStock}`
   },
 }

@@ -637,6 +637,176 @@ def handle_executive_summary(session: Session, run_id: str) -> dict[str, Any]:
     return {"result": result, "chart_spec": chart_spec}
 
 
+def handle_explain_forecast(
+    session: Session,
+    run_id: str,
+    date: Optional[str] = None,
+) -> dict[str, Any]:
+    run = session.get(ForecastRun, run_id)
+    if not run:
+        return {"error": f"Run '{run_id}' not found."}
+    dataset = session.get(Dataset, run.dataset_id)
+    if not dataset:
+        return {"error": f"Dataset '{run.dataset_id}' not found."}
+
+    df = _load_dataset_df(dataset)
+    future_dates = [pt["date"] for pt in (run.forecast_series or []) if pt.get("predicted") is not None]
+
+    from backend.app.services.ml.explainability import explain_decomposition, explain_tree_forecast
+
+    explanation = None
+    if run.artifact_path and os.path.exists(run.artifact_path):
+        try:
+            import joblib
+            from backend.app.services.feature_builder import build_tabular_features
+            model_artifact = joblib.load(run.artifact_path)
+            raw_model = getattr(model_artifact, "model", model_artifact)
+
+            df_clean = df.dropna(subset=[dataset.date_col, dataset.target_col]).sort_values(by=dataset.date_col)
+            feat_df, _, feat_names = build_tabular_features(
+                df=df_clean,
+                date_col=dataset.date_col,
+                target_col=dataset.target_col,
+                regressor_cols=dataset.regressor_cols or [],
+            )
+            explanation = explain_tree_forecast(
+                model=raw_model,
+                feature_names=feat_names,
+                X_sample=feat_df.tail(60).values,
+                target_date=date,
+                future_dates=future_dates,
+            )
+        except Exception:
+            pass
+
+    if not explanation:
+        explanation = explain_decomposition(df, dataset.date_col, dataset.target_col)
+
+    chart_spec = None
+    if explanation.get("method") == "tree_shap" and explanation.get("local_breakdown"):
+        chart_spec = {
+            "type": "horizontal_bars",
+            "title": f"Feature Drivers on {explanation.get('selected_date')}",
+            "data": [
+                {"feature": item["feature"], "impact": item["contribution"]}
+                for item in explanation["local_breakdown"][:6]
+            ],
+            "xKey": "impact",
+            "yKey": "feature",
+        }
+
+    return {"result": explanation, "chart_spec": chart_spec}
+
+
+def handle_segment_performance(session: Session, run_id: str) -> dict[str, Any]:
+    run = session.get(ForecastRun, run_id)
+    if not run:
+        return {"error": f"Run '{run_id}' not found."}
+    dataset = session.get(Dataset, run.dataset_id)
+    if not dataset:
+        return {"error": f"Dataset '{run.dataset_id}' not found."}
+
+    df = _load_dataset_df(dataset)
+    from backend.app.services.ml.segments import compute_segment_and_season_performance
+
+    seg_data = compute_segment_and_season_performance(
+        df=df,
+        date_col=dataset.date_col,
+        target_col=dataset.target_col,
+        group_cols=dataset.group_cols or [],
+        regressor_cols=dataset.regressor_cols or [],
+        backtest_overlay=run.backtest_overlay or [],
+    )
+
+    chart_spec = {
+        "type": "comparison_bars",
+        "title": "Quarterly & Seasonal Sales Distribution",
+        "data": [
+            {"period": s["season"], "sales": s["total_sales"]}
+            for s in seg_data.get("season_performance", [])
+        ],
+        "xKey": "period",
+        "yKey": "sales",
+    }
+
+    return {"result": seg_data, "chart_spec": chart_spec}
+
+
+def handle_inventory_recommendations(
+    session: Session,
+    run_id: str,
+    lead_time_days: int = 7,
+    service_level: str = "95%",
+    current_stock: float = 300.0,
+) -> dict[str, Any]:
+    run = session.get(ForecastRun, run_id)
+    if not run:
+        return {"error": f"Run '{run_id}' not found."}
+
+    from backend.app.services.ml.inventory import calculate_inventory_recommendations
+
+    residuals = []
+    for pt in (run.backtest_overlay or []):
+        act = pt.get("actual", 0.0)
+        pred = pt.get("predictions", {}).get(run.best_model, act)
+        residuals.append(abs(float(act) - float(pred)))
+
+    inv = calculate_inventory_recommendations(
+        forecast_points=run.forecast_series or [],
+        backtest_residuals=residuals,
+        lead_time_days=lead_time_days,
+        service_level=service_level,
+        current_stock=current_stock,
+    )
+
+    chart_spec = {
+        "type": "comparison_bars",
+        "title": f"Inventory Position ({inv['status']})",
+        "data": [
+            {"period": "Current Stock", "sales": inv["current_stock"]},
+            {"period": "Reorder Point", "sales": inv["reorder_point"]},
+            {"period": "Safety Stock", "sales": inv["safety_stock"]},
+        ],
+        "xKey": "period",
+        "yKey": "sales",
+    }
+
+    return {"result": inv, "chart_spec": chart_spec}
+
+
+def handle_check_data_drift(
+    session: Session,
+    dataset_id: str,
+    run_id: Optional[str] = None,
+) -> dict[str, Any]:
+    dataset = session.get(Dataset, dataset_id)
+    if not dataset:
+        return {"error": f"Dataset '{dataset_id}' not found."}
+
+    df = _load_dataset_df(dataset)
+    from backend.app.services.ml.drift import compute_drift_report
+
+    drift = compute_drift_report(
+        df=df,
+        date_col=dataset.date_col,
+        target_col=dataset.target_col,
+        regressor_cols=dataset.regressor_cols or [],
+    )
+
+    chart_spec = {
+        "type": "comparison_bars",
+        "title": f"Population Stability Index (PSI) by Feature ({drift['overall_status']})",
+        "data": [
+            {"period": f["feature"], "sales": f["psi"]}
+            for f in drift.get("features", [])[:6]
+        ],
+        "xKey": "period",
+        "yKey": "sales",
+    }
+
+    return {"result": drift, "chart_spec": chart_spec}
+
+
 # Unified Tool Dispatcher
 TOOL_HANDLERS = {
     "profile_dataset": handle_profile_dataset,
@@ -650,6 +820,10 @@ TOOL_HANDLERS = {
     "top_movers": handle_top_movers,
     "what_if": handle_what_if,
     "executive_summary": handle_executive_summary,
+    "explain_forecast": handle_explain_forecast,
+    "segment_performance": handle_segment_performance,
+    "inventory_recommendations": handle_inventory_recommendations,
+    "check_data_drift": handle_check_data_drift,
 }
 
 
